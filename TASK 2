@@ -1,0 +1,68 @@
+:- use_module(library(csv)).
+:- use_module(library(http/http_server)).
+:- use_module(library(http/http_parameters)).
+
+% Dynamic predicate to store data
+:- dynamic record/4.
+
+% Load data from CSV file
+initialize_data(FilePath) :-
+    retractall(record(_, _, _, _)), % Clear existing records
+    csv_read_file(FilePath, DataRows, [functor(record), arity(4)]),
+    maplist(assert, DataRows).
+
+% Rules for determining eligibility
+scholarship_eligible(ID) :-
+    record(ID, _, AttendanceRate, GradePoint),
+    AttendanceRate >= 75,
+    GradePoint >= 9.0.
+
+exam_permission(ID) :-
+    record(ID, _, AttendanceRate, _),
+    AttendanceRate >= 75.
+
+% REST API Handler
+:- http_handler(root(validate), process_request, []).
+
+% Process Incoming Requests
+process_request(HttpRequest) :-
+    (   http_parameters(HttpRequest, [sid(ID, [integer])]) ->
+        % Handle specific ID
+        (   record(ID, FullName, AttendanceRate, GradePoint) ->
+            (   scholarship_eligible(ID) ->
+                ResultStatus = "Scholarship and Exam Eligible";
+                exam_permission(ID) ->
+                ResultStatus = "Exam Eligible Only";
+                ResultStatus = "Not Eligible"
+            ),
+            format('Content-type: text/plain~n~n'),
+            format('~w (~w): Attendance = ~w, CGPA = ~w, Status = ~w~n',
+                   [ID, FullName, AttendanceRate, GradePoint, ResultStatus])
+        ;   % If ID not found
+            format('Content-type: text/plain~n~n'),
+            format('Record with ID ~w not found~n', [ID])
+        )
+    ;   % Handle all records when no specific ID is provided
+        findall(
+            [ID, FullName, AttendanceRate, GradePoint, ResultStatus],
+            (
+                record(ID, FullName, AttendanceRate, GradePoint),
+                (   scholarship_eligible(ID) ->
+                    ResultStatus = "Scholarship and Exam Eligible";
+                    exam_permission(ID) ->
+                    ResultStatus = "Exam Eligible Only";
+                    ResultStatus = "Not Eligible"
+                )
+            ),
+            AllResults
+        ),
+        format('Content-type: text/plain~n~n'),
+        display_results(AllResults)
+    ).
+
+% Print all records
+display_results([]).
+display_results([[ID, FullName, AttendanceRate, GradePoint, ResultStatus] | Remaining]) :-
+    format('~w (~w): Attendance = ~w, CGPA = ~w, Status = ~w~n',
+           [ID, FullName, AttendanceRate, GradePoint, ResultStatus]),
+    display_results(Remaining).
