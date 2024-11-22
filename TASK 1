@@ -1,0 +1,84 @@
+import numpy as np
+from copy import deepcopy
+
+class SlidingPuzzle:
+    def __init__(self, grid):
+        self.grid = grid
+        self.target = [[1, 2, 3], [4, 5, 6], [7, 8, 0]]
+
+    def calculate_manhattan(self, grid=None):
+        if grid is None:
+            grid = self.grid
+        total_distance = 0
+        for row in range(3):
+            for col in range(3):
+                value = grid[row][col]
+                if value != 0:
+                    goal_row, goal_col = divmod(value - 1, 3)
+                    total_distance += abs(goal_row - row) + abs(goal_col - col)
+        return total_distance
+
+    def generate_moves(self, grid=None):
+        if grid is None:
+            grid = self.grid
+        possible_moves = []
+        empty_row, empty_col = [(i, row.index(0)) for i, row in enumerate(grid) if 0 in row][0]
+        shifts = [(empty_row - 1, empty_col), (empty_row + 1, empty_col), (empty_row, empty_col - 1), (empty_row, empty_col + 1)]
+        for new_row, new_col in shifts:
+            if 0 <= new_row < 3 and 0 <= new_col < 3:
+                updated_grid = deepcopy(grid)
+                updated_grid[empty_row][empty_col], updated_grid[new_row][new_col] = updated_grid[new_row][new_col], updated_grid[empty_row][empty_col]
+                possible_moves.append(updated_grid)
+        return possible_moves
+
+    def solve_with_hill_climb(self):
+        current_state = deepcopy(self.grid)
+        solution_path = [current_state]
+        while True:
+            neighbors = self.generate_moves(current_state)
+            neighbors.sort(key=self.calculate_manhattan)
+            optimal_neighbor = neighbors[0]
+            if self.calculate_manhattan(optimal_neighbor) >= self.calculate_manhattan(current_state):
+                break
+            current_state = optimal_neighbor
+            solution_path.append(current_state)
+
+        return current_state, self.calculate_manhattan(current_state), solution_path
+
+    def show_grid(self, grid):
+        for row in grid:
+            print(" ".join(str(num) if num != 0 else " " for num in row))
+        print("\n")
+
+
+test_inputs = [
+    {
+        "start": [[1, 2, 3], [4, 0, 6], [7, 5, 8]],
+        "note": "Nearly solved, minimal steps required (easy case)"
+    },
+    {
+        "start": [[1, 2, 3], [4, 5, 6], [0, 7, 8]],
+        "note": "Gets stuck at local optimum (classic limitation case)"
+    },
+    {
+        "start": [[1, 2, 3], [4, 5, 6], [8, 7, 0]],
+        "note": "Large steps required to solve, demonstrating plateaus"
+    }
+]
+
+for idx, scenario in enumerate(test_inputs, start=1):
+    print(f"Scenario {idx}: {scenario['note']}")
+    game = SlidingPuzzle(scenario["start"])
+    print("Starting Grid:")
+    game.show_grid(scenario["start"])
+
+    final_state, heuristic_cost, steps = game.solve_with_hill_climb()
+    print("Final Grid:")
+    game.show_grid(final_state)
+    print(f"Final Heuristic Cost: {heuristic_cost}")
+    print(f"Number of Steps: {len(steps)}")
+    if heuristic_cost == 0:
+        print("Outcome: Successfully solved!")
+    else:
+        print("Outcome: Could not solve due to algorithm limitations.\n")
+    print("=" * 50)
